@@ -169,6 +169,12 @@
               </div>
             </div>
 
+            <!-- Honeypot: hidden from people, filled by bots. Submissions with a value are discarded. -->
+            <div class="hp" aria-hidden="true">
+              <label for="company_website">Do not fill this in</label>
+              <input id="company_website" name="company_website" type="text" tabindex="-1" autocomplete="off">
+            </div>
+
             <div class="actions mt-2">
               <button class="btn btn--primary" type="submit">Submit application <span class="arw" aria-hidden="true">&#8594;</span></button>
               <p class="form-note">

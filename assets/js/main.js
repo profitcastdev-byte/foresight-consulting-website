@@ -103,6 +103,29 @@
       });
     });
 
+    var ENDPOINT =
+      'https://script.google.com/macros/s/AKfycbyOyjbDV1PDfkMuboUZXpn1DyITpQ3eHxqZcT7Uc6AaGLoyyVImIFxmDZowgnvTcOcQTQ/exec';
+
+    var submitBtn = form.querySelector('[type="submit"]');
+    var submitLabel = submitBtn ? submitBtn.innerHTML : '';
+
+    var setStatus = function (html, kind) {
+      if (!status) return;
+      status.innerHTML = html;
+      status.classList.add('is-visible');
+      status.classList.toggle('is-error', kind === 'error');
+      status.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+      status.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
+    var setBusy = function (busy) {
+      if (!submitBtn) return;
+      submitBtn.disabled = busy;
+      submitBtn.innerHTML = busy
+        ? 'Sending&#8230;'
+        : submitLabel;
+    };
+
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var firstInvalid = null;
@@ -119,16 +142,36 @@
         return;
       }
 
-      if (status) {
-        status.innerHTML =
-          '<strong>Application received.</strong> A senior member of the practice reviews every ' +
-          'application. If it is a fit, we return with an initial read on your listings and a ' +
-          'proposed scope. If not, we say so and explain why.';
-        status.classList.add('is-visible');
-        status.setAttribute('role', 'status');
-        status.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }
-      form.reset();
+      // Form-encoded keeps this a "simple" request, so no CORS preflight.
+      var body = new URLSearchParams(new FormData(form));
+      body.set('source', 'contact.html');
+
+      setBusy(true);
+
+      fetch(ENDPOINT, { method: 'POST', body: body })
+        .then(function (res) {
+          return res.json().catch(function () { return { ok: res.ok }; });
+        })
+        .then(function (data) {
+          if (!data || !data.ok) throw new Error('Submission rejected');
+          setBusy(false);
+          setStatus(
+            '<strong>Application received.</strong> A senior member of the practice reviews every ' +
+            'application. If it is a fit, we return with an initial read on your listings and a ' +
+            'proposed scope. If not, we say so and explain why.',
+            'ok'
+          );
+          form.reset();
+        })
+        .catch(function () {
+          setBusy(false);
+          setStatus(
+            '<strong>That did not go through.</strong> Please try again, or email us directly at ' +
+            '<a class="tlink" href="mailto:foresight.consulting2025@gmail.com">foresight.consulting2025@gmail.com</a> ' +
+            'so your application is not lost.',
+            'error'
+          );
+        });
     });
   }
 

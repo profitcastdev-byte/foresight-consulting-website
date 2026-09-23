@@ -1011,6 +1011,8 @@ a.card:hover, .card--hover:hover { transform: translateY(-4px); box-shadow: var(
   font-size: .9375rem; display: none;
 }
 .form-status.is-visible { display: block; }
+/* Failed submission — distinguish from the success state at a glance */
+.form-status.is-error { border-left-color: #c0392b; }
 
 .split { display: grid; grid-template-columns: minmax(0, .68fr) minmax(0, 1fr); gap: clamp(1.5rem, 3vw, 3rem); align-items: start; }
 @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
@@ -1167,4 +1169,10 @@ a.card:hover, .card--hover:hover { transform: translateY(-4px); box-shadow: var(
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Honeypot — off-screen rather than display:none, which more bots skip */
+.hp {
+  position: absolute; left: -9999px; top: auto;
+  width: 1px; height: 1px; overflow: hidden;
 }
