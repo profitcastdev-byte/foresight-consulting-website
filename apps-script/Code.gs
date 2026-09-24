@@ -11,10 +11,9 @@
 
 var RECIPIENT = 'foresight.consulting2025@gmail.com';
 
-// Durable backup — "Profitcast X Foresight Consulting – Website Leads Tracker",
-// owned by admin@foresightconsulting.in. Every application is written here as
-// well as emailed, so a failed or deleted email cannot lose a lead.
-// Set to '' to disable and email only.
+// Durable backup — "Profitcast X Foresight Consulting – Website Leads Tracker".
+// Every application is written here as well as emailed, so a failed or deleted
+// email cannot lose a lead. Set to '' to disable and email only.
 var SHEET_ID = '1kmbC5a7QviTZzXWLoRUlnVK1nQ2Sz3nz30Y5Q3Fl6ts';
 
 /* ---- Handler ------------------------------------------------------------ */
