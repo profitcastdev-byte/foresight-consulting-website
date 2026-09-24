@@ -1,20 +1,27 @@
 /**
  * Foresight Consulting — Platform Growth Audit form handler
  *
- * Receives POSTs from contact.html and emails each application to RECIPIENT.
- * Returns {"ok":true} only when the mail was actually sent; any failure returns
- * {"ok":false}, which makes the website show its red "that did not go through"
- * message instead of a false "Application received".
+ * Stage 1: every application is written to the leads sheet.
+ * Stage 2: flip SEND_EMAIL to true to also get a notification email.
+ *
+ * The sheet is the record of the lead, so a failed write returns
+ * {"ok":false} and the website shows its red "that did not go through"
+ * message — an applicant is never told they succeeded when nothing was saved.
  */
 
 /* ---- Settings ----------------------------------------------------------- */
 
-var RECIPIENT = 'foresight.consulting2025@gmail.com';
-
-// Durable backup — "Profitcast X Foresight Consulting – Website Leads Tracker".
-// Every application is written here as well as emailed, so a failed or deleted
-// email cannot lose a lead. Set to '' to disable and email only.
+// "Profitcast X Foresight Consulting – Website Leads Tracker"
 var SHEET_ID = '1kmbC5a7QviTZzXWLoRUlnVK1nQ2Sz3nz30Y5Q3Fl6ts';
+
+// Stage 2 — set to true once the sheet is confirmed working.
+var SEND_EMAIL = false;
+var RECIPIENT  = 'foresight.consulting2025@gmail.com';
+
+var HEADERS = ['Timestamp', 'Name', 'Role', 'Brand', 'City', 'Outlets',
+               'Monthly online sales', 'Swiggy listing', 'Zomato listing',
+               'Commercial challenge', '90-day target', 'Phone', 'Email',
+               'Flagged', 'Source'];
 
 /* ---- Handler ------------------------------------------------------------ */
 
@@ -22,88 +29,109 @@ function doPost(e) {
   try {
     var p = (e && e.parameter) || {};
 
-    // The hidden anti-bot field. Note this does NOT discard the submission —
+    // The hidden anti-bot field. This does NOT discard the submission —
     // browsers sometimes autofill hidden fields, and silently binning a real
-    // applicant is worse than seeing an occasional flagged email.
+    // applicant is worse than an occasional flagged row you can scan past.
     var suspected = String(p.company_website || '').trim() !== '';
 
-    var rows = [
-      ['Name',                 p.name],
-      ['Role',                 p.role],
-      ['Brand',                p.brand],
-      ['City',                 p.city],
-      ['Outlets',              p.outlets],
-      ['Monthly online sales', p.sales],
-      ['Swiggy listing',       p.swiggy],
-      ['Zomato listing',       p.zomato],
-      ['Commercial challenge', p.challenge],
-      ['90-day target',        p.target],
-      ['Phone',                p.phone],
-      ['Email',                p.email]
-    ];
+    // The sheet is the lead record. If this throws, the catch below reports
+    // failure to the website rather than pretending the application landed.
+    logToSheet_(p, suspected);
 
-    var body = rows.map(function (r) {
-      return r[0] + ': ' + (String(r[1] == null ? '' : r[1]).trim() || '—');
-    }).join('\n');
-
-    body += '\n\n--\nSubmitted: ' + new Date().toString();
-    body += '\nSource: ' + (String(p.source || '').trim() || 'unknown');
-    if (suspected) {
-      body += '\n\n[FLAGGED] The hidden anti-bot field was filled in. This is '
-            + 'usually a bot, but a browser autofilling the field would look '
-            + 'identical. Read it before discarding.';
-    }
-
-    var brand = String(p.brand || '').trim() || 'no brand given';
-    var city  = String(p.city  || '').trim() || 'no city given';
-
-    var options = {
-      to:      RECIPIENT,
-      subject: (suspected ? '[Possible spam] ' : '') +
-               'Audit application — ' + brand + ' (' + city + ')',
-      body:    body,
-      name:    'Foresight website'
-    };
-
-    // Reply-To set to the applicant, so hitting Reply reaches them directly.
-    var applicant = String(p.email || '').trim();
-    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(applicant)) {
-      options.replyTo = applicant;
-    }
-
-    MailApp.sendEmail(options);
-
-    // Backup is best-effort: a sheet problem must not fail a sent application.
-    if (SHEET_ID) {
+    // Notification only — the lead is already safely stored, so a mail
+    // problem must not fail the submission.
+    if (SEND_EMAIL) {
       try {
-        logToSheet_(p, suspected);
-      } catch (sheetErr) {
-        console.error('Sheet backup failed: ' + sheetErr);
+        sendMail_(p, suspected);
+      } catch (mailErr) {
+        console.error('Email failed (lead was still saved): ' + mailErr);
       }
     }
 
     return json_({ ok: true });
 
   } catch (err) {
-    // Surfaces in Executions, and tells the website to show the error message.
     console.error('doPost failed: ' + err);
     return json_({ ok: false, error: String(err) });
   }
 }
 
-/* ---- Helpers ------------------------------------------------------------ */
+/* ---- Sheet -------------------------------------------------------------- */
 
 function logToSheet_(p, suspected) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheets()[0];
+
+  // Write the header row once, on the first submission.
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(['Timestamp', 'Name', 'Role', 'Brand', 'City', 'Outlets',
-                     'Sales', 'Swiggy', 'Zomato', 'Challenge', 'Target',
-                     'Phone', 'Email', 'Flagged']);
+    sheet.appendRow(HEADERS);
+    sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
   }
-  sheet.appendRow([new Date(), p.name, p.role, p.brand, p.city, p.outlets,
-                   p.sales, p.swiggy, p.zomato, p.challenge, p.target,
-                   p.phone, p.email, suspected ? 'possible spam' : '']);
+
+  sheet.appendRow([
+    new Date(),
+    clean_(p.name),
+    clean_(p.role),
+    clean_(p.brand),
+    clean_(p.city),
+    clean_(p.outlets),
+    clean_(p.sales),
+    clean_(p.swiggy),
+    clean_(p.zomato),
+    clean_(p.challenge),
+    clean_(p.target),
+    "'" + clean_(p.phone),   // leading quote keeps +91… as text, not a formula
+    clean_(p.email),
+    suspected ? 'possible spam' : '',
+    clean_(p.source) || 'unknown'
+  ]);
 }
+
+function clean_(v) {
+  return String(v == null ? '' : v).trim();
+}
+
+/* ---- Email (stage 2) ---------------------------------------------------- */
+
+function sendMail_(p, suspected) {
+  var fields = [
+    ['Name', p.name], ['Role', p.role], ['Brand', p.brand], ['City', p.city],
+    ['Outlets', p.outlets], ['Monthly online sales', p.sales],
+    ['Swiggy listing', p.swiggy], ['Zomato listing', p.zomato],
+    ['Commercial challenge', p.challenge], ['90-day target', p.target],
+    ['Phone', p.phone], ['Email', p.email]
+  ];
+
+  var body = fields.map(function (f) {
+    return f[0] + ': ' + (clean_(f[1]) || '—');
+  }).join('\n');
+
+  body += '\n\n--\nSubmitted: ' + new Date().toString();
+  body += '\nSaved to the leads sheet.';
+  if (suspected) {
+    body += '\n\n[FLAGGED] The hidden anti-bot field was filled in. Usually a '
+          + 'bot, but a browser autofilling it looks identical. Read before '
+          + 'discarding.';
+  }
+
+  var options = {
+    to:      RECIPIENT,
+    subject: (suspected ? '[Possible spam] ' : '') + 'Audit application — ' +
+             (clean_(p.brand) || 'no brand given') +
+             ' (' + (clean_(p.city) || 'no city given') + ')',
+    body:    body,
+    name:    'Foresight website'
+  };
+
+  var applicant = clean_(p.email);
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(applicant)) {
+    options.replyTo = applicant;
+  }
+
+  MailApp.sendEmail(options);
+}
+
+/* ---- Helpers ------------------------------------------------------------ */
 
 function json_(obj) {
   return ContentService
@@ -111,18 +139,26 @@ function json_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-/* Opening the /exec URL in a browser confirms the deployment is live, instead
-   of the "Script function not found: doGet" error the old one returned. */
+/* Opening the /exec URL in a browser confirms the deployment is live. */
 function doGet() {
   return json_({ ok: true, status: 'Foresight audit form endpoint is live' });
 }
 
-/* Run this once from the editor to grant permissions and prove mail works. */
-function sendTestEmail() {
-  MailApp.sendEmail(
-    RECIPIENT,
-    'Foresight form — test email',
-    'If you are reading this, the script can send mail to ' + RECIPIENT + '.\n\n' +
-    'Remaining MailApp quota today: ' + MailApp.getRemainingDailyQuota()
-  );
+/* ---- Run this first ------------------------------------------------------
+   Select testSheetWrite in the editor's function dropdown and press Run. It
+   grants the script permission to touch the sheet and proves access works,
+   without needing the website at all. Delete the test row afterwards.
+   -------------------------------------------------------------------------- */
+
+function testSheetWrite() {
+  logToSheet_({
+    name: 'ZZ TEST ROW — delete me',
+    role: 'test', brand: 'TEST', city: 'TEST', outlets: '1',
+    sales: 'Under 2 lakh', swiggy: '', zomato: '',
+    challenge: 'Editor test run', target: 'n/a',
+    phone: '+910000000000', email: 'test@example.com', source: 'testSheetWrite'
+  }, false);
+
+  Logger.log('Row written to: ' +
+             SpreadsheetApp.openById(SHEET_ID).getName());
 }
