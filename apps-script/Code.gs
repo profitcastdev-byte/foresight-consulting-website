@@ -11,10 +11,11 @@
 
 var RECIPIENT = 'foresight.consulting2025@gmail.com';
 
-// Optional durable backup. Leave '' to email only. To enable: create a blank
-// Google Sheet, copy the long id out of its URL, and paste it between the
-// quotes. Rows are then written even if the email later bounces.
-var SHEET_ID = '';
+// Durable backup — "Profitcast X Foresight Consulting – Website Leads Tracker",
+// owned by admin@foresightconsulting.in. Every application is written here as
+// well as emailed, so a failed or deleted email cannot lose a lead.
+// Set to '' to disable and email only.
+var SHEET_ID = '1kmbC5a7QviTZzXWLoRUlnVK1nQ2Sz3nz30Y5Q3Fl6ts';
 
 /* ---- Handler ------------------------------------------------------------ */
 
