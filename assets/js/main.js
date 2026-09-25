@@ -104,7 +104,7 @@
     });
 
     var ENDPOINT =
-      'https://script.google.com/macros/s/AKfycbyOyjbDV1PDfkMuboUZXpn1DyITpQ3eHxqZcT7Uc6AaGLoyyVImIFxmDZowgnvTcOcQTQ/exec';
+      'https://script.google.com/macros/s/AKfycbwsm4LbdxvemIYrUyk2_SwLMkyG1IS01MqRHU0KQin90HGAd1xBva0ItwyfYTJ-fWlD/exec';
 
     var submitBtn = form.querySelector('[type="submit"]');
     var submitLabel = submitBtn ? submitBtn.innerHTML : '';
