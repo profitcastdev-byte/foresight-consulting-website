@@ -1,11 +1,11 @@
 /**
  * Foresight Consulting — Platform Growth Audit form handler
  *
- * Writes every application submitted on contact.html to the leads sheet.
- * Sheet only: no email is sent, so the only permission this asks for is
- * access to Google Sheets.
+ * Writes every submission from contact.html into the leads sheet.
+ * Sheet only: no email is sent, so the script asks for one permission
+ * (Google Sheets) and nothing else.
  *
- * The sheet is the sole record of a lead, so a failed write returns
+ * The sheet is the only record of a lead, so a failed write returns
  * {"ok":false} and the website shows its red "that did not go through"
  * message. An applicant is never told they succeeded when nothing was saved.
  */
@@ -36,7 +36,8 @@ function doPost(e) {
     return json_({ ok: true });
 
   } catch (err) {
-    // Surfaces in the Executions log, and tells the website to show its error.
+    // Shows up in the Executions log, and tells the website to display its
+    // error message rather than a false "Application received".
     console.error('doPost failed: ' + err);
     return json_({ ok: false, error: String(err) });
   }
@@ -91,7 +92,7 @@ function doGet() {
 }
 
 /* ---- Run this first ------------------------------------------------------
-   Select testSheetWrite in the editor's function dropdown and press Run. It
+   Pick testSheetWrite in the editor's function dropdown and press Run. It
    grants the sheet permission and proves access works, without needing the
    website or a deployment. Delete the test row afterwards.
    -------------------------------------------------------------------------- */
