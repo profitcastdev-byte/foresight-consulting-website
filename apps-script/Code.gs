@@ -1,19 +1,22 @@
 /**
  * Foresight Consulting — Platform Growth Audit form handler
  *
- * Writes every submission from contact.html into the leads sheet.
- * Sheet only: no email is sent, so the script asks for one permission
- * (Google Sheets) and nothing else.
+ * Every submission from contact.html is written to the leads sheet and then
+ * emailed as a notification.
  *
- * The sheet is the only record of a lead, so a failed write returns
- * {"ok":false} and the website shows its red "that did not go through"
- * message. An applicant is never told they succeeded when nothing was saved.
+ * The sheet is the record of the lead. A failed write returns {"ok":false}
+ * and the website shows its red "that did not go through" message, so an
+ * applicant is never told they succeeded when nothing was saved. The email is
+ * only a notification, so a mail fault is logged and swallowed — the lead is
+ * already safe by then.
  */
 
 /* ---- Settings ----------------------------------------------------------- */
 
 // "Profitcast X Foresight Consulting – Website Leads Tracker"
 var SHEET_ID = '1kmbC5a7QviTZzXWLoRUlnVK1nQ2Sz3nz30Y5Q3Fl6ts';
+
+var RECIPIENT = 'foresight.consulting2025@gmail.com';
 
 var HEADERS = ['Timestamp', 'Name', 'Role', 'Brand', 'City', 'Outlets',
                'Monthly online sales', 'Swiggy listing', 'Zomato listing',
@@ -31,13 +34,20 @@ function doPost(e) {
     // applicant is worse than an occasional flagged row you can scan past.
     var suspected = String(p.company_website || '').trim() !== '';
 
+    // Must succeed: this is the lead record.
     logToSheet_(p, suspected);
+
+    // Notification only. The row is already stored, so a mail problem must
+    // not turn a saved application into a failure for the applicant.
+    try {
+      sendMail_(p, suspected);
+    } catch (mailErr) {
+      console.error('Email failed, but the lead was saved to the sheet: ' + mailErr);
+    }
 
     return json_({ ok: true });
 
   } catch (err) {
-    // Shows up in the Executions log, and tells the website to display its
-    // error message rather than a false "Application received".
     console.error('doPost failed: ' + err);
     return json_({ ok: false, error: String(err) });
   }
@@ -48,7 +58,6 @@ function doPost(e) {
 function logToSheet_(p, suspected) {
   var sheet = SpreadsheetApp.openById(SHEET_ID).getSheets()[0];
 
-  // Write the header row once, on the first submission.
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(HEADERS);
     sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
@@ -74,11 +83,52 @@ function logToSheet_(p, suspected) {
   ]);
 }
 
-function clean_(v) {
-  return String(v == null ? '' : v).trim();
+/* ---- Email -------------------------------------------------------------- */
+
+function sendMail_(p, suspected) {
+  var fields = [
+    ['Name', p.name], ['Role', p.role], ['Brand', p.brand], ['City', p.city],
+    ['Outlets', p.outlets], ['Monthly online sales', p.sales],
+    ['Swiggy listing', p.swiggy], ['Zomato listing', p.zomato],
+    ['Commercial challenge', p.challenge], ['90-day target', p.target],
+    ['Phone', p.phone], ['Email', p.email]
+  ];
+
+  var body = fields.map(function (f) {
+    return f[0] + ': ' + (clean_(f[1]) || '—');
+  }).join('\n');
+
+  body += '\n\n--\nSubmitted: ' + new Date().toString();
+  body += '\nSaved to: ' + SpreadsheetApp.openById(SHEET_ID).getUrl();
+  if (suspected) {
+    body += '\n\n[FLAGGED] The hidden anti-bot field was filled in. Usually a '
+          + 'bot, but a browser autofilling it looks identical. Read before '
+          + 'discarding — the row is in the sheet either way.';
+  }
+
+  var options = {
+    to:      RECIPIENT,
+    subject: (suspected ? '[Possible spam] ' : '') + 'Audit application — ' +
+             (clean_(p.brand) || 'no brand given') +
+             ' (' + (clean_(p.city) || 'no city given') + ')',
+    body:    body,
+    name:    'Foresight website'
+  };
+
+  // Reply-To set to the applicant, so hitting Reply reaches them directly.
+  var applicant = clean_(p.email);
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(applicant)) {
+    options.replyTo = applicant;
+  }
+
+  MailApp.sendEmail(options);
 }
 
 /* ---- Helpers ------------------------------------------------------------ */
+
+function clean_(v) {
+  return String(v == null ? '' : v).trim();
+}
 
 function json_(obj) {
   return ContentService
@@ -91,11 +141,20 @@ function doGet() {
   return json_({ ok: true, status: 'Foresight audit form endpoint is live' });
 }
 
-/* ---- Run this first ------------------------------------------------------
-   Pick testSheetWrite in the editor's function dropdown and press Run. It
-   grants the sheet permission and proves access works, without needing the
-   website or a deployment. Delete the test row afterwards.
+/* ---- Editor test runs ----------------------------------------------------
+   Run sendTestEmail once after pasting this in. It triggers the new mail
+   permission prompt and proves delivery, without needing the website.
    -------------------------------------------------------------------------- */
+
+function sendTestEmail() {
+  MailApp.sendEmail(
+    RECIPIENT,
+    'Foresight form — test email',
+    'If you are reading this, the script can send mail to ' + RECIPIENT + '.\n\n' +
+    'Remaining MailApp quota today: ' + MailApp.getRemainingDailyQuota()
+  );
+  Logger.log('Test email sent to ' + RECIPIENT);
+}
 
 function testSheetWrite() {
   logToSheet_({
